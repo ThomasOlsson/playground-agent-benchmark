@@ -3237,7 +3237,7 @@ Paths are relative to the case `workdir/`. Three forms:
 - directory (trailing `/`): `"out/"` — matches any descendant at any depth
 - single-segment glob: `"out/*.json"` — `*` and `?` match within one path segment only
 
-Recursive `**` is not supported in v1. Use a directory entry instead.
+Recursive `**` is **not supported** in v1, and using it is misleading: under the current matcher it collapses to a single-segment wildcard that cannot cross `/`. For recursive allowance, always use the directory form (`some/dir/`) instead.
 
 ## Case-insensitive filesystems
 
