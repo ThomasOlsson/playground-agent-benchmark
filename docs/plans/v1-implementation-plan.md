@@ -14,7 +14,7 @@
 
 **Branch:** `feat/v1-benchmark-core`.
 
-**Test strategy:** `unittest` from stdlib. Each module under `bench/` and `validators/` gets a sibling `tests/test_<module>.py`. Scripts are tested by invoking them as subprocesses (`python -m scripts.new_run …`) against temp directories. Run the full suite with `python -m unittest discover -s tests -v`.
+**Test strategy:** `unittest` from stdlib. Each module under `bench/` and `validators/` gets a sibling `tests/test_<module>.py`. Scripts are tested by invoking them as subprocesses (`python3 -m scripts.new_run …`) against temp directories. Run the full suite with `python3 -m unittest discover -s tests -v`.
 
 **Repo state at plan start:** bootstrap. Only `README.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `docs/plans/v1-design.md`, and `.gitkeep`-ed empty `artifacts/`, `reports/`, `runs/`.
 
@@ -62,8 +62,8 @@ Append to `.gitignore`:
 
 - [ ] **Step 4: Verify the test harness discovers zero tests**
 
-Run: `python -m unittest discover -s tests -v`
-Expected: "Ran 0 tests in 0.000s" with exit code 0.
+Run: `python3 -m unittest discover -s tests -v`
+Expected: "Ran 0 tests in 0.000s". Exit code is 5 on Python ≥ 3.12 ("NO TESTS RAN") and 0 on older Pythons; either is acceptable for this sanity check. From Task 2 onward, tests exist and exit code is 0 on success.
 
 - [ ] **Step 5: Commit**
 
@@ -116,7 +116,7 @@ class TestSchemas(unittest.TestCase):
 
 - [ ] **Step 2: Run the test and confirm it fails**
 
-Run: `python -m unittest tests.test_schemas -v`
+Run: `python3 -m unittest tests.test_schemas -v`
 Expected: FAIL — FileNotFoundError for each schema.
 
 - [ ] **Step 3: Create `schemas/case.schema.json`**
@@ -250,7 +250,7 @@ Expected: FAIL — FileNotFoundError for each schema.
 
 - [ ] **Step 6: Run the test and confirm it passes**
 
-Run: `python -m unittest tests.test_schemas -v`
+Run: `python3 -m unittest tests.test_schemas -v`
 Expected: PASS (3 tests).
 
 - [ ] **Step 7: Commit**
@@ -358,7 +358,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_loader -v`
+Run: `python3 -m unittest tests.test_loader -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'bench.loader'`.
 
 - [ ] **Step 3: Implement `bench/loader.py`**
@@ -456,7 +456,7 @@ def load_case(path: Path) -> dict:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_loader -v`
+Run: `python3 -m unittest tests.test_loader -v`
 Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
@@ -547,7 +547,7 @@ class ProductController extends Controller
 
 - [ ] **Step 5: Verify file layout**
 
-Run: `python -c "from pathlib import Path; [print(p) for p in sorted(Path('fixtures/routes-php').rglob('*')) if p.is_file()]"`
+Run: `python3 -c "from pathlib import Path; [print(p) for p in sorted(Path('fixtures/routes-php').rglob('*')) if p.is_file()]"`
 Expected: four files listed — README.md, routes/web.php, and two controllers.
 
 - [ ] **Step 6: Commit**
@@ -655,7 +655,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Verify fixture readme contains the typo marker**
 
-Run: `python -c "from pathlib import Path; assert 'recieve' in Path('fixtures/todo-py/README.md').read_text(); print('ok')"`
+Run: `python3 -c "from pathlib import Path; assert 'recieve' in Path('fixtures/todo-py/README.md').read_text(); print('ok')"`
 Expected: `ok`
 
 - [ ] **Step 5: Commit**
@@ -733,7 +733,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_cases -v`
+Run: `python3 -m unittest tests.test_cases -v`
 Expected: FAIL — zero or fewer than 4 case files found.
 
 - [ ] **Step 3: Create `cases/smoke/SMK-001.json`**
@@ -857,7 +857,7 @@ The validator here is the `keys_present` variant — it is responsible for invok
 
 - [ ] **Step 7: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_cases -v`
+Run: `python3 -m unittest tests.test_cases -v`
 Expected: PASS (6 tests).
 
 - [ ] **Step 8: Commit**
@@ -926,7 +926,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_paths -v`
+Run: `python3 -m unittest tests.test_paths -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'bench.paths'`.
 
 - [ ] **Step 3: Implement `bench/paths.py`**
@@ -974,7 +974,7 @@ def any_match(candidate: str, patterns: list[str]) -> bool:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_paths -v`
+Run: `python3 -m unittest tests.test_paths -v`
 Expected: PASS (8 tests).
 
 - [ ] **Step 5: Commit**
@@ -1072,7 +1072,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_baseline -v`
+Run: `python3 -m unittest tests.test_baseline -v`
 Expected: FAIL — `ModuleNotFoundError`.
 
 - [ ] **Step 3: Implement `bench/baseline.py`**
@@ -1157,7 +1157,7 @@ def diff(baseline: dict, current: dict) -> dict:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_baseline -v`
+Run: `python3 -m unittest tests.test_baseline -v`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
@@ -1250,7 +1250,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_exact_text -v`
+Run: `python3 -m unittest tests.test_exact_text -v`
 Expected: FAIL — module missing.
 
 - [ ] **Step 3: Implement `validators/exact_text.py`**
@@ -1302,7 +1302,7 @@ def validate(case: dict, workdir: Path) -> dict:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_exact_text -v`
+Run: `python3 -m unittest tests.test_exact_text -v`
 Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
@@ -1366,7 +1366,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_json_file -v`
+Run: `python3 -m unittest tests.test_json_file -v`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement `validators/json_file.py`**
@@ -1392,7 +1392,7 @@ def validate(case: dict, workdir: Path) -> dict:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_json_file -v`
+Run: `python3 -m unittest tests.test_json_file -v`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
@@ -1505,7 +1505,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_keys_present -v`
+Run: `python3 -m unittest tests.test_keys_present -v`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement `validators/keys_present.py`**
@@ -1612,7 +1612,7 @@ def validate(case: dict, workdir: Path) -> dict:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_keys_present -v`
+Run: `python3 -m unittest tests.test_keys_present -v`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
@@ -1696,7 +1696,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_file_exists -v`
+Run: `python3 -m unittest tests.test_file_exists -v`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement `validators/file_exists.py`**
@@ -1742,7 +1742,7 @@ def validate(case: dict, workdir: Path) -> dict:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_file_exists -v`
+Run: `python3 -m unittest tests.test_file_exists -v`
 Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
@@ -1848,7 +1848,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_allowed_paths_check -v`
+Run: `python3 -m unittest tests.test_allowed_paths_check -v`
 Expected: FAIL — module missing.
 
 - [ ] **Step 3: Implement `validators/allowed_paths_check.py`**
@@ -1910,7 +1910,7 @@ def validate(case: dict, workdir: Path) -> dict:
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_allowed_paths_check -v`
+Run: `python3 -m unittest tests.test_allowed_paths_check -v`
 Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
@@ -2005,7 +2005,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `python -m unittest tests.test_runs -v`
+Run: `python3 -m unittest tests.test_runs -v`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement `bench/runs.py`**
@@ -2068,7 +2068,7 @@ def filter_by_suite(cases: list[dict], suite: str | None, explicit_ids: list[str
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
-Run: `python -m unittest tests.test_runs -v`
+Run: `python3 -m unittest tests.test_runs -v`
 Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
@@ -2166,7 +2166,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the test and confirm it fails**
 
-Run: `python -m unittest tests.test_new_run_script -v`
+Run: `python3 -m unittest tests.test_new_run_script -v`
 Expected: FAIL — module missing.
 
 - [ ] **Step 3: Implement `scripts/new_run.py`**
@@ -2269,7 +2269,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run the test and confirm it passes**
 
-Run: `python -m unittest tests.test_new_run_script -v`
+Run: `python3 -m unittest tests.test_new_run_script -v`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
@@ -2404,7 +2404,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 3: Run the test and confirm it fails**
 
-Run: `python -m unittest tests.test_validate_script -v`
+Run: `python3 -m unittest tests.test_validate_script -v`
 Expected: FAIL — `scripts.validate` missing.
 
 - [ ] **Step 4: Implement `scripts/validate.py`**
@@ -2495,7 +2495,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 5: Run the test and confirm it passes**
 
-Run: `python -m unittest tests.test_validate_script -v`
+Run: `python3 -m unittest tests.test_validate_script -v`
 Expected: PASS (4 tests).
 
 - [ ] **Step 6: Commit**
@@ -2570,7 +2570,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the test and confirm it fails**
 
-Run: `python -m unittest tests.test_summarize -v`
+Run: `python3 -m unittest tests.test_summarize -v`
 Expected: FAIL — script missing.
 
 - [ ] **Step 3: Implement `scripts/summarize.py`**
@@ -2629,7 +2629,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run the test and confirm it passes**
 
-Run: `python -m unittest tests.test_summarize -v`
+Run: `python3 -m unittest tests.test_summarize -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -2681,7 +2681,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run the test and confirm it fails**
 
-Run: `python -m unittest tests.test_compare_stub -v`
+Run: `python3 -m unittest tests.test_compare_stub -v`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement `scripts/compare.py`**
@@ -2719,7 +2719,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run the test and confirm it passes**
 
-Run: `python -m unittest tests.test_compare_stub -v`
+Run: `python3 -m unittest tests.test_compare_stub -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -2823,7 +2823,7 @@ v1 has no execution harness. The loop is manual:
 ## 1. Scaffold a run
 
 ```bash
-python -m scripts.new_run --label my-agent --suite smoke
+python3 -m scripts.new_run --label my-agent --suite smoke
 ```
 
 This prints the new run directory, e.g. `runs/20260421-180000-my-agent/`.
@@ -2841,7 +2841,7 @@ Feed `case.json` (or its `prompt` field) to your agent of choice. Whatever tool 
 ## 3. Validate
 
 ```bash
-python -m scripts.validate --run runs/20260421-180000-my-agent
+python3 -m scripts.validate --run runs/20260421-180000-my-agent
 ```
 
 Writes `result.json` per case and updates `manifest.json` counts. Exits `0` iff every case passed.
@@ -2849,7 +2849,7 @@ Writes `result.json` per case and updates `manifest.json` counts. Exits `0` iff 
 ## 4. Summarize
 
 ```bash
-python -m scripts.summarize --run runs/20260421-180000-my-agent
+python3 -m scripts.summarize --run runs/20260421-180000-my-agent
 ```
 
 Writes `summary.md` — a one-page table plus run metadata.
@@ -2861,7 +2861,7 @@ Deferred. `scripts/compare.py --help` describes the planned shape.
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
 ```
 ```
 
@@ -2870,7 +2870,7 @@ python -m unittest discover -s tests -v
 Run:
 
 ```bash
-python -c "
+python3 -c "
 from pathlib import Path
 for name in ['methodology.md', 'case-authoring.md', 'running.md']:
     assert (Path('docs') / name).read_text().count('\n') > 10, name
@@ -2985,22 +2985,22 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Run just the e2e test**
 
-Run: `python -m unittest tests.test_e2e_smoke -v`
+Run: `python3 -m unittest tests.test_e2e_smoke -v`
 Expected: PASS.
 
 - [ ] **Step 3: Run the full suite**
 
-Run: `python -m unittest discover -s tests -v`
+Run: `python3 -m unittest discover -s tests -v`
 Expected: every test passes; no warnings about skipped tests.
 
 - [ ] **Step 4: Sanity-run the scripts against the real `runs/` directory**
 
 ```bash
-python -m scripts.new_run --label demo --suite smoke
+python3 -m scripts.new_run --label demo --suite smoke
 # note the path printed
 # manually place outputs under workdir/, then:
-python -m scripts.validate --run runs/<printed-dir>
-python -m scripts.summarize --run runs/<printed-dir>
+python3 -m scripts.validate --run runs/<printed-dir>
+python3 -m scripts.summarize --run runs/<printed-dir>
 cat runs/<printed-dir>/summary.md
 ```
 
@@ -3045,7 +3045,7 @@ Task 20's e2e test proves the mechanical pipeline works. Meaningful differentiat
 
 ## Notes for the executing engineer
 
-- **Testing convention:** all tests use `unittest` and are discoverable via `python -m unittest discover -s tests -v`. No third-party runner.
+- **Testing convention:** all tests use `unittest` and are discoverable via `python3 -m unittest discover -s tests -v`. No third-party runner.
 - **Temp dirs:** tests use `tempfile.TemporaryDirectory()` extensively; they never touch the repo's own `runs/` directory by default. Scripts default to `runs/` only when invoked without `--runs-dir`.
 - **File modification detection:** sha256 based, via `bench/baseline.py`. Rename shows up as one deleted + one created (intentional; v1 does not track renames).
 - **Path separators:** every relative path stored or compared is POSIX-style (`/`). Windows users must normalize before comparing; not a v1 concern.
