@@ -3254,6 +3254,7 @@ Path matching is byte-for-byte. Authors on macOS or Windows should not rely on f
 - Each validator reads its args from `case.validator.args`. Authoritative arg lists live in the validator modules under `validators/`.
 - Unknown args are currently **silently ignored** (v1 convenience). Don't lean on this — post-v1 we may reject unknown args.
 - **`exact_text` arg interaction worth calling out:** `strip=True` runs before the trailing-newline check, so `strip=True` + `trailing_newline=false` will accept files that end in whitespace or a newline (the strip eats them first). If you want strict "no trailing newline, and no surrounding whitespace either," leave `strip=false` (the default) and rely on the trailing-newline rule alone.
+- **`json_file` is intentionally permissive about top-level type.** It accepts any valid JSON value — object, array, number, string, `true`/`false`/`null`. Shape policing (e.g. "top level must be an object with keys X, Y, Z") belongs to `keys_present`, not here.
 
 ## Changing an existing case
 
