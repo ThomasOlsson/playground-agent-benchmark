@@ -3255,6 +3255,7 @@ Path matching is byte-for-byte. Authors on macOS or Windows should not rely on f
 - Unknown args are currently **silently ignored** (v1 convenience). Don't lean on this — post-v1 we may reject unknown args.
 - **`exact_text` arg interaction worth calling out:** `strip=True` runs before the trailing-newline check, so `strip=True` + `trailing_newline=false` will accept files that end in whitespace or a newline (the strip eats them first). If you want strict "no trailing newline, and no surrounding whitespace either," leave `strip=false` (the default) and rely on the trailing-newline rule alone.
 - **`json_file` is intentionally permissive about top-level type.** It accepts any valid JSON value — object, array, number, string, `true`/`false`/`null`. Shape policing (e.g. "top level must be an object with keys X, Y, Z") belongs to `keys_present`, not here.
+- **`keys_present` tolerates extra keys.** Listing `required: ["name", "version"]` does NOT reject a JSON file that contains `{"name": "x", "version": "1.0.0", "surprise": true}`. v1 has no `additionalProperties: false` equivalent. If you need strict object shape, phrase the prompt precisely and accept that an "unexpected extra key" will currently not fail the case. v1 will not grow this validator further; if strict shape becomes necessary, we'll graduate to a real jsonschema dependency.
 
 ## Changing an existing case
 
