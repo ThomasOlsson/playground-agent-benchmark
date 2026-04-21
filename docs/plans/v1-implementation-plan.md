@@ -3249,6 +3249,12 @@ Recursive `**` is **not supported** in v1, and using it is misleading: under the
 
 Path matching is byte-for-byte. Authors on macOS or Windows should not rely on filesystem case-folding.
 
+## Validator args — v1 conventions
+
+- Each validator reads its args from `case.validator.args`. Authoritative arg lists live in the validator modules under `validators/`.
+- Unknown args are currently **silently ignored** (v1 convenience). Don't lean on this — post-v1 we may reject unknown args.
+- **`exact_text` arg interaction worth calling out:** `strip=True` runs before the trailing-newline check, so `strip=True` + `trailing_newline=false` will accept files that end in whitespace or a newline (the strip eats them first). If you want strict "no trailing newline, and no surrounding whitespace either," leave `strip=false` (the default) and rely on the trailing-newline rule alone.
+
 ## Changing an existing case
 
 If a change alters case meaning — the prompt, the expected output, the validator args — bump `schema_version`. This makes benchmark drift explicit and keeps historical runs re-scorable against their own snapshot.
