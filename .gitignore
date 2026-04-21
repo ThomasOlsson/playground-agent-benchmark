@@ -69,3 +69,7 @@ build/
 # Logs
 *.log
 logs/
+
+# Unit-test scratch
+/tmp_test_*/
+.coverage

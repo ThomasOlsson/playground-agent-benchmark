@@ -1,0 +1,39 @@
+{
+  "$id": "case.schema.json",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version", "id", "title", "category", "difficulty",
+    "mode", "tags", "fixture", "allowed_paths", "prompt",
+    "expected_output", "validator"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "pattern": "^[A-Z]+-\\d{3}$" },
+    "title": { "type": "string" },
+    "category": { "type": "string" },
+    "difficulty": { "type": "string", "enum": ["trivial", "easy", "medium"] },
+    "mode": { "type": "string", "enum": ["read-only", "plan-only", "write"] },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "fixture": { "type": ["string", "null"] },
+    "allow_deletions": { "type": "boolean" },
+    "allowed_paths": { "type": "array", "items": { "type": "string" } },
+    "prompt": { "type": "string" },
+    "expected_output": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["file", "stdout", "json", "none"] },
+        "path": { "type": "string" }
+      }
+    },
+    "validator": {
+      "type": "object",
+      "required": ["type", "args"],
+      "properties": {
+        "type": { "type": "string" },
+        "args": { "type": "object" }
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$id": "case-result.schema.json",
+  "schema_version": 1,
+  "type": "object",
+  "required": [
+    "schema_version", "case_id", "status", "validators",
+    "allowed_paths_check", "duration_ms", "latency_ms",
+    "artifacts", "notes"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "case_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["pass", "fail", "error", "skipped"] },
+    "validators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "ok"],
+        "properties": {
+          "type":     { "type": "string" },
+          "ok":       { "type": "boolean" },
+          "detail":   { "type": "string" },
+          "observed": {},
+          "expected": {}
+        }
+      }
+    },
+    "allowed_paths_check": {
+      "type": "object",
+      "required": ["ok", "violations", "counts"],
+      "properties": {
+        "ok":         { "type": "boolean" },
+        "violations": { "type": "array" },
+        "counts":     { "type": "object" }
+      }
+    },
+    "duration_ms": { "type": "integer" },
+    "latency_ms":  { "type": ["integer", "null"] },
+    "artifacts": {
+      "type": "object",
+      "required": ["case_snapshot", "workdir", "changes_json", "changes_diff", "transcript"],
+      "properties": {
+        "case_snapshot": { "type": "string" },
+        "workdir":       { "type": "string" },
+        "changes_json":  { "type": "string" },
+        "changes_diff":  { "type": "string" },
+        "transcript":    { "type": "string" }
+      }
+    },
+    "notes": { "type": "string" }
+  }
+}
