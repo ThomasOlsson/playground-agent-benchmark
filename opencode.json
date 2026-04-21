@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ollama-local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": { "baseURL": "http://localhost:11434/v1" },
+      "models": {
+        "gemma4-bench-32k": { "name": "Gemma 4 bench alias, 32k ctx (local Ollama)" }
+      }
+    }
+  },
+  "model": "ollama-local/gemma4-bench-32k",
+  "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+    "edit": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "bash": "deny",
+    "question": "deny",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "codesearch": "deny",
+    "external_directory": "deny",
+    "doom_loop": "deny"
+  },
+  "agent": {
+    "bench": { "model": "ollama-local/gemma4-bench-32k" }
+  }
+}

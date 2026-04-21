@@ -57,6 +57,7 @@ credentials/
 .claude/
 .cursor/
 .aider*
+!.aider.conf.yml
 .continue/
 .opencode/
 
