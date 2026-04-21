@@ -1,0 +1,71 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Temporary / local scratch
+tmp/
+temp/
+.cache/
+*.tmp
+*.bak
+
+# Benchmark run outputs
+runs/*
+!runs/.gitkeep
+!runs/README.md
+
+# Generated reports / exports
+reports/*
+!reports/.gitkeep
+
+# Local result artifacts
+artifacts/*
+!artifacts/.gitkeep
+
+# Local env / secrets
+.env
+.env.*
+*.local
+secrets/
+tokens/
+credentials/
+*.token
+*.auth-token
+
+# Tool / model local config
+.claude/
+.cursor/
+.aider*
+.continue/
+.opencode/
+
+# Test output
+coverage/
+htmlcov/
+dist/
+build/
+
+# Logs
+*.log
+logs/
