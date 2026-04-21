@@ -248,7 +248,7 @@ Matching rules per entry (see §4 for the authoritative syntax spec):
 
 ## 9. Run/result format
 
-One run per directory `runs/<YYYYMMDD-HHMMSS>-<label>/`.
+One run per directory `runs/<YYYYMMDD-HHMMSS>-<label>/`. Every run captures enough metadata and raw artifacts that another agent (or a human) can reconstruct "who produced what, where, and with what outcome" from the directory alone — without needing live access to the running system.
 
 ```
 runs/20260421-180000-local-llama/
@@ -263,33 +263,70 @@ runs/20260421-180000-local-llama/
         out/
           banner.txt
       result.json
-      transcript.txt       # optional, free-form
+      changes.json         # machine-readable diff summary (created/modified/deleted)
+      changes.diff         # unified diff of text changes vs fixture source (best-effort)
+      transcript.txt       # optional, free-form (operator fills in)
   summary.md
 ```
 
-### `manifest.json`
+### 9.1 `manifest.json` (run-level)
 
 ```json
 {
   "schema_version": 1,
-  "run_id": "20260421-180000-local-llama",
-  "started_at": "2026-04-21T18:00:00Z",
+  "run_id":      "20260421-180000-local-llama",
+  "timestamp":   "2026-04-21T18:00:00Z",
+  "started_at":  "2026-04-21T18:00:00Z",
   "finished_at": "2026-04-21T18:03:11Z",
-  "label": "local-llama",
-  "agent": { "name": "…", "model": "…", "notes": "…" },
-  "suite": "smoke",
-  "cases": ["SMK-001", "STR-001"],
-  "counts": { "total": 2, "passed": 2, "failed": 0, "error": 0 }
+  "label":       "local-llama",
+  "suite":       "smoke",
+  "cases":       ["SMK-001", "STR-001"],
+  "agent": {
+    "frontend":         "claude-code",
+    "model":            "claude-opus-4-7",
+    "provider":         "anthropic",
+    "local_vs_cloud":   "cloud",
+    "runtime_base_url": null,
+    "notes":            ""
+  },
+  "environment": {
+    "host":   "workstation-01",
+    "os":     "Linux-6.17.0-20-generic-x86_64",
+    "python": "3.12.3",
+    "arch":   "x86_64"
+  },
+  "hardware": {
+    "cpu_cores": 16,
+    "memory_gb": 64,
+    "gpu":       null
+  },
+  "counts": { "total": 2, "passed": 2, "failed": 0, "error": 0 },
+  "notes": ""
 }
 ```
 
-### `result.json` (per case)
+Field rules:
+- `timestamp` — canonical run-start ISO-8601 in UTC; populated equal to `started_at` at scaffold time and never mutated.
+- `started_at` / `finished_at` — `started_at` is set by `new_run.py`; `finished_at` is set by `validate.py` at the end of its run. Either may be `null` until its stage has completed.
+- `agent.frontend` — tool name driving the model: `claude-code`, `codex`, `cursor`, `aider`, `llama.cpp`, `ollama-cli`, etc. Empty string `""` if unknown.
+- `agent.model` — model identifier string.
+- `agent.provider` — vendor/engine name: `anthropic`, `openai`, `ollama`, `vllm`, `bedrock`, etc. Empty string `""` if unknown.
+- `agent.local_vs_cloud` — one of `"local"`, `"cloud"`, `"unknown"`.
+- `agent.runtime_base_url` — only set for local servers or custom proxies (e.g. `"http://localhost:11434"`). `null` otherwise.
+- `environment` — auto-collected by `new_run.py` via `platform.*` stdlib calls. Always present.
+- `hardware.cpu_cores` — `os.cpu_count()`, always present. `memory_gb` is read from `/proc/meminfo` on Linux; `null` where the stdlib cannot provide it. `gpu` is operator-supplied at scaffold time (`--gpu`), `null` otherwise.
+- `counts` — totals, updated by `validate.py`.
+- `notes` — freeform run-level operator note.
+
+No required field is ever omitted. Unknown values are `""` (strings), `null` (non-strings), or `0` (counts).
+
+### 9.2 `result.json` (per case)
 
 ```json
 {
   "schema_version": 1,
   "case_id": "SMK-001",
-  "status": "pass",
+  "status":  "pass",
   "validators": [
     { "type": "exact_text", "ok": true, "detail": "bytes match" }
   ],
@@ -299,20 +336,75 @@ runs/20260421-180000-local-llama/
     "counts": { "created": 1, "modified": 0, "deleted": 0, "unchanged": 0 }
   },
   "duration_ms": 0,
+  "latency_ms": null,
+  "artifacts": {
+    "case_snapshot": "cases/SMK-001/case.json",
+    "workdir":       "cases/SMK-001/workdir",
+    "changes_json":  "cases/SMK-001/changes.json",
+    "changes_diff":  "cases/SMK-001/changes.diff",
+    "transcript":    "cases/SMK-001/transcript.txt"
+  },
   "notes": ""
 }
 ```
 
-`status` ∈ {`pass`, `fail`, `error`, `skipped`}. `error` covers validator exceptions (missing workdir, malformed JSON in a `json_file` target that crashed the parse, etc.); `fail` covers expected-shape-but-wrong-content.
+Field rules:
+- `status` ∈ {`pass`, `fail`, `error`, `skipped`}. `error` = validator raised; `fail` = expected shape, wrong content.
+- `duration_ms` — wall-clock time spent inside validators for this case. Always present.
+- `latency_ms` — operator-supplied agent latency (how long the model took to produce the output). `null` by default; operators may patch this field post-hoc if they wish.
+- `artifacts` — POSIX-style paths relative to the run directory. Every key is always present. A `transcript` value is listed whether or not the file exists; consumers check existence. `changes_diff` may be an empty file; it is always written.
+- `notes` — freeform per-case operator note.
 
-### `summary.md`
+### 9.3 `changes.json` (per case, machine-readable)
 
-One-page table, one row per case:
+Written by `validate.py` from the workdir-vs-baseline diff:
 
-| case | status | declared validator | allowed_paths | notes |
-|------|--------|--------------------|----------------|-------|
+```json
+{
+  "created":  ["out/banner.txt"],
+  "modified": [],
+  "deleted":  [],
+  "unchanged_count": 0,
+  "unsupported": []
+}
+```
 
-Footer: totals, run label, agent metadata, run duration. Kept plain so two summaries diff cleanly.
+Lets downstream analysis agents answer "what did this model change?" without re-walking the workdir or rehashing files.
+
+### 9.4 `changes.diff` (per case, human-readable)
+
+Unified-diff text (produced via `difflib.unified_diff`) for text-file changes:
+
+- `created` paths: diffed against `/dev/null`.
+- `modified` paths under `workdir/<fixture-basename>/...`: diffed against `fixtures/<fixture-basename>/<relpath>`.
+- `deleted` paths: diffed against their fixture source, to `/dev/null`.
+- Binary files (anything that fails UTF-8 decode): skipped with a `# skipped binary: <path>` marker.
+- If there are no textual changes at all, the file is written empty — always present so the artifact map is uniform.
+
+This gives later readers (agent or human) a patch-style view without needing to reconstruct baseline bytes from hashes.
+
+### 9.5 `summary.md`
+
+Produced by `summarize.py`. Fixed sections, in order:
+
+1. **Header** — run id, timestamp, label, suite.
+2. **Agent block** — frontend / model / provider / local-or-cloud / base URL / agent notes.
+3. **Environment block** — host / os / python / arch / cpu cores / memory / gpu.
+4. **Case table** — `| case | status | declared validator | allowed_paths | latency_ms | notes |`, one row per case.
+5. **Footer** — totals (passed/failed/error), run duration, operator notes.
+
+Kept plain Markdown so two summaries diff cleanly.
+
+### 9.6 Metadata for cross-run comparison
+
+The manifest plus per-case `artifacts` block together let an analysis agent answer four load-bearing questions from the run directory alone:
+
+- *Who produced this output?* — `agent.frontend`, `agent.model`, `agent.provider`, `agent.local_vs_cloud`, `agent.runtime_base_url`.
+- *Where did it run?* — `environment.*`, `hardware.*`.
+- *What exactly did they produce?* — `artifacts.workdir` (raw files), `artifacts.changes_json` (structured diff), `artifacts.changes_diff` (patch view).
+- *Why did it pass or fail?* — `validators[]`, `allowed_paths_check.violations`, `notes`.
+
+Operators are not required to populate every optional field. The shape is fixed, though: unset fields carry `""` or `null` rather than being omitted, so downstream tools can rely on key presence.
 
 ## 10. Script surface (v1)
 

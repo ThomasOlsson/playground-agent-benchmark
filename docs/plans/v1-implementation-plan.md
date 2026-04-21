@@ -8,7 +8,9 @@
 
 `bench/` is a concrete shared package, not a speculative `core/`/`lib/` — it exists only because specific helpers (`paths.matches`, `baseline.walk`, case loader, run-dir layout) are reused by two scripts plus the `allowed_paths_check` validator. Every function in `bench/` has at least two real callers at merge time.
 
-**Tech Stack:** Python 3.10+, stdlib only (`json`, `argparse`, `pathlib`, `hashlib`, `fnmatch`, `shutil`, `datetime`, `unittest`). No third-party dependencies.
+**Tech Stack:** Python 3.10+, stdlib only (`json`, `argparse`, `pathlib`, `hashlib`, `fnmatch`, `shutil`, `datetime`, `difflib`, `platform`, `unittest`). No third-party dependencies.
+
+**Run/result design (2026-04-21 revision):** Every run captures enough metadata to support later cross-model comparison — `agent.{frontend, model, provider, local_vs_cloud, runtime_base_url, notes}`, auto-collected `environment.{host, os, python, arch}` and best-effort `hardware.{cpu_cores, memory_gb, gpu}`, and per-case artifact references (`case_snapshot`, `workdir`, `changes_json`, `changes_diff`, `transcript`). `validate.py` writes `changes.json` (machine-readable diff summary) and `changes.diff` (unified diff vs fixture source) next to `result.json` so retrospective analysis works from the run directory alone. See spec §9 for the authoritative shape.
 
 **Spec reference:** `docs/plans/v1-design.md`. The load-bearing sections are §4 (case format), §7 (validators), §8 (`allowed_paths_check`), §9 (run/result format), §10 (script surface).
 
@@ -171,25 +173,50 @@ Expected: FAIL — FileNotFoundError for each schema.
   "schema_version": 1,
   "type": "object",
   "required": [
-    "schema_version", "run_id", "started_at", "finished_at",
-    "label", "agent", "suite", "cases", "counts"
+    "schema_version", "run_id", "timestamp", "started_at", "finished_at",
+    "label", "agent", "suite", "cases",
+    "environment", "hardware", "counts", "notes"
   ],
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
-    "run_id": { "type": "string" },
-    "started_at": { "type": ["string", "null"] },
+    "run_id":      { "type": "string" },
+    "timestamp":   { "type": ["string", "null"] },
+    "started_at":  { "type": ["string", "null"] },
     "finished_at": { "type": ["string", "null"] },
-    "label": { "type": "string" },
+    "label":       { "type": "string" },
+    "suite":       { "type": ["string", "null"] },
+    "cases":       { "type": "array", "items": { "type": "string" } },
     "agent": {
       "type": "object",
+      "required": ["frontend", "model", "provider", "local_vs_cloud", "runtime_base_url", "notes"],
       "properties": {
-        "name":  { "type": "string" },
-        "model": { "type": "string" },
-        "notes": { "type": "string" }
+        "frontend":         { "type": "string" },
+        "model":            { "type": "string" },
+        "provider":         { "type": "string" },
+        "local_vs_cloud":   { "type": "string", "enum": ["local", "cloud", "unknown"] },
+        "runtime_base_url": { "type": ["string", "null"] },
+        "notes":            { "type": "string" }
       }
     },
-    "suite": { "type": ["string", "null"] },
-    "cases": { "type": "array", "items": { "type": "string" } },
+    "environment": {
+      "type": "object",
+      "required": ["host", "os", "python", "arch"],
+      "properties": {
+        "host":   { "type": "string" },
+        "os":     { "type": "string" },
+        "python": { "type": "string" },
+        "arch":   { "type": "string" }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "required": ["cpu_cores", "memory_gb", "gpu"],
+      "properties": {
+        "cpu_cores": { "type": ["integer", "null"] },
+        "memory_gb": { "type": ["number",  "null"] },
+        "gpu":       { "type": ["string",  "null"] }
+      }
+    },
     "counts": {
       "type": "object",
       "required": ["total", "passed", "failed", "error"],
@@ -199,7 +226,8 @@ Expected: FAIL — FileNotFoundError for each schema.
         "failed": { "type": "integer" },
         "error":  { "type": "integer" }
       }
-    }
+    },
+    "notes": { "type": "string" }
   }
 }
 ```
@@ -213,7 +241,8 @@ Expected: FAIL — FileNotFoundError for each schema.
   "type": "object",
   "required": [
     "schema_version", "case_id", "status", "validators",
-    "allowed_paths_check", "duration_ms", "notes"
+    "allowed_paths_check", "duration_ms", "latency_ms",
+    "artifacts", "notes"
   ],
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
@@ -225,8 +254,8 @@ Expected: FAIL — FileNotFoundError for each schema.
         "type": "object",
         "required": ["type", "ok"],
         "properties": {
-          "type": { "type": "string" },
-          "ok":   { "type": "boolean" },
+          "type":     { "type": "string" },
+          "ok":       { "type": "boolean" },
           "detail":   { "type": "string" },
           "observed": {},
           "expected": {}
@@ -237,12 +266,24 @@ Expected: FAIL — FileNotFoundError for each schema.
       "type": "object",
       "required": ["ok", "violations", "counts"],
       "properties": {
-        "ok": { "type": "boolean" },
+        "ok":         { "type": "boolean" },
         "violations": { "type": "array" },
-        "counts": { "type": "object" }
+        "counts":     { "type": "object" }
       }
     },
     "duration_ms": { "type": "integer" },
+    "latency_ms":  { "type": ["integer", "null"] },
+    "artifacts": {
+      "type": "object",
+      "required": ["case_snapshot", "workdir", "changes_json", "changes_diff", "transcript"],
+      "properties": {
+        "case_snapshot": { "type": "string" },
+        "workdir":       { "type": "string" },
+        "changes_json":  { "type": "string" },
+        "changes_diff":  { "type": "string" },
+        "transcript":    { "type": "string" }
+      }
+    },
     "notes": { "type": "string" }
   }
 }
@@ -1935,6 +1976,9 @@ Exposes:
 - `write_result(case_dir, result) -> None` / `read_result(case_dir) -> dict`.
 - `list_cases(cases_root) -> list[Path]` — all `*.json` cases.
 - `filter_by_suite(cases: list[dict], suite: str | None, explicit_ids: list[str] | None) -> list[dict]` — suite match via `suite in case["tags"]`; `explicit_ids` overrides suite filtering.
+- `collect_environment() -> dict` — host/os/python/arch from `platform.*`. Always returns every key (never missing).
+- `collect_hardware(gpu: str | None = None) -> dict` — `cpu_cores` from `os.cpu_count()`; `memory_gb` parsed from `/proc/meminfo` on Linux (`null` elsewhere); `gpu` is the operator-supplied value (`null` if not given).
+- `utc_now_iso() -> str` — helper for canonical ISO-8601 UTC timestamps used in manifests.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -1998,6 +2042,30 @@ class TestRuns(unittest.TestCase):
         ids = [c["id"] for c in runs.filter_by_suite(cases, suite="smoke", explicit_ids=["B"])]
         self.assertEqual(ids, ["B"])
 
+    def test_collect_environment_shape(self):
+        env = runs.collect_environment()
+        for key in ("host", "os", "python", "arch"):
+            self.assertIn(key, env)
+            self.assertIsInstance(env[key], str)
+            self.assertNotEqual(env[key], "")
+
+    def test_collect_hardware_shape(self):
+        hw = runs.collect_hardware()
+        for key in ("cpu_cores", "memory_gb", "gpu"):
+            self.assertIn(key, hw)
+        self.assertTrue(hw["cpu_cores"] is None or isinstance(hw["cpu_cores"], int))
+        self.assertTrue(hw["memory_gb"] is None or isinstance(hw["memory_gb"], (int, float)))
+        self.assertTrue(hw["gpu"] is None or isinstance(hw["gpu"], str))
+
+    def test_collect_hardware_gpu_override(self):
+        hw = runs.collect_hardware(gpu="RTX 4090")
+        self.assertEqual(hw["gpu"], "RTX 4090")
+
+    def test_utc_now_iso_format(self):
+        import re
+        s = runs.utc_now_iso()
+        self.assertRegex(s, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -2011,10 +2079,12 @@ Expected: FAIL.
 - [ ] **Step 3: Implement `bench/runs.py`**
 
 ```python
-"""Run-dir layout, manifest and result I/O, case filtering."""
+"""Run-dir layout, manifest and result I/O, case filtering, env/hardware collection."""
 from __future__ import annotations
 
 import json
+import os
+import platform
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -2064,12 +2134,47 @@ def filter_by_suite(cases: list[dict], suite: str | None, explicit_ids: list[str
     if suite:
         return [c for c in cases if suite in c.get("tags", [])]
     return list(cases)
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def collect_environment() -> dict:
+    return {
+        "host":   platform.node() or "unknown",
+        "os":     platform.platform() or "unknown",
+        "python": platform.python_version() or "unknown",
+        "arch":   platform.machine() or "unknown",
+    }
+
+
+def _read_memory_gb() -> float | None:
+    meminfo = Path("/proc/meminfo")
+    if not meminfo.exists():
+        return None
+    try:
+        for line in meminfo.read_text().splitlines():
+            if line.startswith("MemTotal:"):
+                kb = int(line.split()[1])
+                return round(kb / 1024 / 1024, 1)
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def collect_hardware(gpu: str | None = None) -> dict:
+    return {
+        "cpu_cores": os.cpu_count(),
+        "memory_gb": _read_memory_gb(),
+        "gpu":       gpu,
+    }
 ```
 
 - [ ] **Step 4: Run the tests and confirm they pass**
 
 Run: `python3 -m unittest tests.test_runs -v`
-Expected: PASS (7 tests).
+Expected: PASS (11 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -2086,15 +2191,14 @@ git commit -m "feat(bench): add run-dir, manifest, result, and case-filter helpe
 - Create: `scripts/new_run.py`
 - Test: `tests/test_new_run_script.py`
 
-Responsibilities (spec §10 + §8.1):
+Responsibilities (spec §8.1, §9.1, §10):
 
-1. Parse `--label`, `--suite`, optional `--cases id,id`, optional `--runs-dir`, optional `--cases-dir`, optional `--fixtures-dir`.
-2. Load all cases under `--cases-dir` (default `cases/`). Filter.
-3. `new_run_dir(runs_dir, label)` — create run dir.
-4. Write `manifest.json` stub.
+1. Parse required `--label`, plus optional `--suite`, `--cases id,id`, `--runs-dir`, `--cases-dir`, `--fixtures-dir`.
+2. Parse optional agent-metadata flags: `--frontend`, `--model`, `--provider`, `--local-or-cloud` (choices: `local`, `cloud`, `unknown`; default `unknown`), `--runtime-base-url`, `--agent-notes`, `--notes`, `--gpu`.
+3. Load all cases under `--cases-dir` (default `cases/`). Filter by suite/cases.
+4. Create the run dir via `runs.new_run_dir`. Populate `manifest.json` with full v1 shape (spec §9.1): `timestamp` + `started_at` = `runs.utc_now_iso()`, `finished_at = null`, full `agent` / `environment` / `hardware` blocks, `counts` zeroed, `notes` from `--notes`.
 5. For each selected case: create `cases/<id>/workdir/`; snapshot `case.json`; if `fixture` non-null, `shutil.copytree` the fixture into `workdir/<basename>/`; capture baseline; write `workdir/.bench/allowed_paths.json`.
-
-Print the new run path on success.
+6. Print the new run path to stdout (one line) on success.
 
 - [ ] **Step 1: Write a failing end-to-end test**
 
@@ -2142,6 +2246,67 @@ class TestNewRun(unittest.TestCase):
                 self.assertTrue((workdir / ".bench" / "baseline.json").exists())
                 self.assertTrue((workdir / ".bench" / "allowed_paths.json").exists())
                 self.assertTrue((d / "cases" / cid / "case.json").exists())
+
+    def test_manifest_has_full_v1_shape(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = run("--label", "u", "--cases", "SMK-001", "--runs-dir", td,
+                    "--frontend", "claude-code",
+                    "--model", "claude-opus-4-7",
+                    "--provider", "anthropic",
+                    "--local-or-cloud", "cloud",
+                    "--runtime-base-url", "",
+                    "--agent-notes", "test run",
+                    "--notes", "first smoke",
+                    "--gpu", "none")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            m = json.loads((next(Path(td).iterdir()) / "manifest.json").read_text())
+
+            # Top-level required fields present
+            for key in ("schema_version", "run_id", "timestamp", "started_at", "finished_at",
+                        "label", "suite", "cases", "agent", "environment", "hardware",
+                        "counts", "notes"):
+                self.assertIn(key, m, f"missing top-level field: {key}")
+
+            # Timestamps populated at scaffold time
+            self.assertIsNotNone(m["timestamp"])
+            self.assertIsNotNone(m["started_at"])
+            self.assertIsNone(m["finished_at"])
+            self.assertEqual(m["timestamp"], m["started_at"])
+
+            # Agent populated from CLI
+            self.assertEqual(m["agent"]["frontend"], "claude-code")
+            self.assertEqual(m["agent"]["model"], "claude-opus-4-7")
+            self.assertEqual(m["agent"]["provider"], "anthropic")
+            self.assertEqual(m["agent"]["local_vs_cloud"], "cloud")
+            self.assertIsNone(m["agent"]["runtime_base_url"])   # empty string normalizes to null
+            self.assertEqual(m["agent"]["notes"], "test run")
+
+            # Environment auto-populated
+            for key in ("host", "os", "python", "arch"):
+                self.assertIn(key, m["environment"])
+                self.assertIsInstance(m["environment"][key], str)
+
+            # Hardware: cpu_cores always populated; gpu from CLI
+            self.assertIsInstance(m["hardware"]["cpu_cores"], int)
+            self.assertEqual(m["hardware"]["gpu"], "none")
+
+            # Counts start at zero
+            self.assertEqual(m["counts"], {"total": 1, "passed": 0, "failed": 0, "error": 0})
+            self.assertEqual(m["notes"], "first smoke")
+
+    def test_manifest_defaults_when_flags_omitted(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = run("--label", "u", "--cases", "SMK-001", "--runs-dir", td)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            m = json.loads((next(Path(td).iterdir()) / "manifest.json").read_text())
+            self.assertEqual(m["agent"]["frontend"], "")
+            self.assertEqual(m["agent"]["model"], "")
+            self.assertEqual(m["agent"]["provider"], "")
+            self.assertEqual(m["agent"]["local_vs_cloud"], "unknown")
+            self.assertIsNone(m["agent"]["runtime_base_url"])
+            self.assertEqual(m["agent"]["notes"], "")
+            self.assertEqual(m["notes"], "")
+            self.assertIsNone(m["hardware"]["gpu"])
 
     def test_fixture_gets_copied_for_ro_001(self):
         with tempfile.TemporaryDirectory() as td:
@@ -2195,6 +2360,18 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--runs-dir", default=str(REPO_ROOT / "runs"))
     p.add_argument("--cases-dir", default=str(REPO_ROOT / "cases"))
     p.add_argument("--fixtures-dir", default=str(REPO_ROOT / "fixtures"))
+
+    # Agent metadata (all optional; defaults preserve key presence with empty/null values)
+    p.add_argument("--frontend", default="", help="Agent tool name: claude-code, codex, cursor, aider, ollama-cli, ...")
+    p.add_argument("--model", default="", help="Model identifier string.")
+    p.add_argument("--provider", default="", help="Vendor/engine name: anthropic, openai, ollama, vllm, ...")
+    p.add_argument("--local-or-cloud", default="unknown", choices=["local", "cloud", "unknown"])
+    p.add_argument("--runtime-base-url", default="", help="Non-empty for local servers or custom proxies.")
+    p.add_argument("--agent-notes", default="", help="Freeform note attached to the agent block.")
+
+    # Run-level metadata
+    p.add_argument("--notes", default="", help="Freeform run-level note.")
+    p.add_argument("--gpu", default=None, help="GPU description; stored as null if omitted.")
     return p.parse_args()
 
 
@@ -2224,6 +2401,33 @@ def _scaffold_case(case: dict, case_dir: Path, fixtures_dir: Path) -> None:
     )
 
 
+def _build_manifest(args: argparse.Namespace, run_dir: Path, case_ids: list[str]) -> dict:
+    now_iso = runs.utc_now_iso()
+    base_url = args.runtime_base_url.strip() or None
+    return {
+        "schema_version": 1,
+        "run_id":      run_dir.name,
+        "timestamp":   now_iso,
+        "started_at":  now_iso,
+        "finished_at": None,
+        "label":       args.label,
+        "suite":       args.suite,
+        "cases":       case_ids,
+        "agent": {
+            "frontend":         args.frontend,
+            "model":            args.model,
+            "provider":         args.provider,
+            "local_vs_cloud":   args.local_or_cloud,
+            "runtime_base_url": base_url,
+            "notes":            args.agent_notes,
+        },
+        "environment": runs.collect_environment(),
+        "hardware":    runs.collect_hardware(gpu=args.gpu),
+        "counts":      {"total": len(case_ids), "passed": 0, "failed": 0, "error": 0},
+        "notes":       args.notes,
+    }
+
+
 def main() -> int:
     args = _parse_args()
     cases_dir = Path(args.cases_dir)
@@ -2241,18 +2445,7 @@ def main() -> int:
     run_dir = runs.new_run_dir(runs_dir, args.label, now=now)
     case_ids = [c["id"] for c in selected]
 
-    manifest = {
-        "schema_version": 1,
-        "run_id": run_dir.name,
-        "started_at": None,
-        "finished_at": None,
-        "label": args.label,
-        "agent": {"name": "", "model": "", "notes": ""},
-        "suite": args.suite,
-        "cases": case_ids,
-        "counts": {"total": len(case_ids), "passed": 0, "failed": 0, "error": 0},
-    }
-    runs.write_manifest(run_dir, manifest)
+    runs.write_manifest(run_dir, _build_manifest(args, run_dir, case_ids))
 
     for case in selected:
         case_dir = run_dir / "cases" / case["id"]
@@ -2270,7 +2463,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run the test and confirm it passes**
 
 Run: `python3 -m unittest tests.test_new_run_script -v`
-Expected: PASS (3 tests).
+Expected: PASS (5 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -2287,13 +2480,17 @@ git commit -m "feat(scripts): add new_run.py that scaffolds a run dir with basel
 - Create: `scripts/validate.py`
 - Test: `tests/test_validate_script.py`
 
-Responsibilities (spec §10 + §9):
+Responsibilities (spec §9 + §10):
 
 1. Parse `--run <run_dir>`.
 2. Read manifest.
-3. For each case id in manifest: load `cases/<id>/case.json`; run the case's declared validator (`VALIDATOR_REGISTRY[case["validator"]["type"]].validate(case, workdir)`) and always-on `allowed_paths_check`; determine status; write `result.json`.
-4. Update manifest counts; write back.
-5. Exit 0 iff every case `status == "pass"`; else exit 1.
+3. For each case id: load `cases/<id>/case.json`; run the declared validator (via `REGISTRY[case["validator"]["type"]]`) and always-on `allowed_paths_check`; determine status.
+4. For each case, write three artifacts next to `result.json`:
+   - `changes.json` — machine-readable diff summary (spec §9.3).
+   - `changes.diff` — unified-diff text vs fixture source (spec §9.4); empty file if no textual changes.
+   - `result.json` — full per-case result per spec §9.2, including `artifacts` references, `duration_ms`, and `latency_ms: null`.
+5. Update manifest: `counts`, and set `finished_at = runs.utc_now_iso()`.
+6. Exit 0 iff every case `status == "pass"`; else exit 1.
 
 Validator dispatch via a registry dict in `validators/__init__.py`.
 
@@ -2386,7 +2583,7 @@ class TestValidateScript(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertFalse(result["allowed_paths_check"]["ok"])
 
-    def test_manifest_counts_updated(self):
+    def test_manifest_counts_and_finished_at_updated(self):
         with tempfile.TemporaryDirectory() as td:
             run_dir = run_new("--label", "u", "--cases", "SMK-001", "--runs-dir", td)
             workdir = run_dir / "cases" / "SMK-001" / "workdir"
@@ -2396,6 +2593,62 @@ class TestValidateScript(unittest.TestCase):
             run_validate(run_dir)
             m = json.loads((run_dir / "manifest.json").read_text())
             self.assertEqual(m["counts"], {"total": 1, "passed": 1, "failed": 0, "error": 0})
+            self.assertIsNotNone(m["finished_at"])
+
+    def test_result_has_artifacts_and_latency(self):
+        with tempfile.TemporaryDirectory() as td:
+            run_dir = run_new("--label", "u", "--cases", "SMK-001", "--runs-dir", td)
+            workdir = run_dir / "cases" / "SMK-001" / "workdir"
+            (workdir / "out").mkdir()
+            (workdir / "out" / "banner.txt").write_bytes(b"HELLO-BENCHMARK-V1")
+
+            run_validate(run_dir)
+            result = json.loads((run_dir / "cases" / "SMK-001" / "result.json").read_text())
+            self.assertIn("latency_ms", result)
+            self.assertIsNone(result["latency_ms"])
+            artifacts = result["artifacts"]
+            self.assertEqual(artifacts["case_snapshot"], "cases/SMK-001/case.json")
+            self.assertEqual(artifacts["workdir"],       "cases/SMK-001/workdir")
+            self.assertEqual(artifacts["changes_json"],  "cases/SMK-001/changes.json")
+            self.assertEqual(artifacts["changes_diff"],  "cases/SMK-001/changes.diff")
+            self.assertEqual(artifacts["transcript"],    "cases/SMK-001/transcript.txt")
+
+    def test_changes_json_written(self):
+        with tempfile.TemporaryDirectory() as td:
+            run_dir = run_new("--label", "u", "--cases", "SMK-001", "--runs-dir", td)
+            workdir = run_dir / "cases" / "SMK-001" / "workdir"
+            (workdir / "out").mkdir()
+            (workdir / "out" / "banner.txt").write_bytes(b"HELLO-BENCHMARK-V1")
+
+            run_validate(run_dir)
+            changes = json.loads((run_dir / "cases" / "SMK-001" / "changes.json").read_text())
+            self.assertEqual(changes["created"], ["out/banner.txt"])
+            self.assertEqual(changes["modified"], [])
+            self.assertEqual(changes["deleted"], [])
+
+    def test_changes_diff_written_for_new_text_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            run_dir = run_new("--label", "u", "--cases", "SMK-001", "--runs-dir", td)
+            workdir = run_dir / "cases" / "SMK-001" / "workdir"
+            (workdir / "out").mkdir()
+            (workdir / "out" / "banner.txt").write_bytes(b"HELLO-BENCHMARK-V1")
+
+            run_validate(run_dir)
+            diff_text = (run_dir / "cases" / "SMK-001" / "changes.diff").read_text()
+            self.assertIn("HELLO-BENCHMARK-V1", diff_text)
+            self.assertIn("+++ ", diff_text)
+
+    def test_changes_diff_present_even_on_scope_violation(self):
+        # The artifact must exist regardless of pass/fail so downstream analysis is uniform.
+        with tempfile.TemporaryDirectory() as td:
+            run_dir = run_new("--label", "u", "--cases", "SMK-001", "--runs-dir", td)
+            workdir = run_dir / "cases" / "SMK-001" / "workdir"
+            (workdir / "out").mkdir()
+            (workdir / "out" / "banner.txt").write_bytes(b"HELLO-BENCHMARK-V1")
+            (workdir / "rogue.txt").write_text("nope\n")
+            run_validate(run_dir)
+            self.assertTrue((run_dir / "cases" / "SMK-001" / "changes.diff").exists())
+            self.assertTrue((run_dir / "cases" / "SMK-001" / "changes.json").exists())
 
 
 if __name__ == "__main__":
@@ -2410,31 +2663,122 @@ Expected: FAIL — `scripts.validate` missing.
 - [ ] **Step 4: Implement `scripts/validate.py`**
 
 ```python
-"""Run validators over a scaffolded run directory and record per-case results."""
+"""Run validators over a scaffolded run directory and record per-case results + artifacts."""
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import time
 from pathlib import Path
 
-from bench import runs
+from bench import baseline, runs
 from validators import ALWAYS_ON, REGISTRY
 
 
-def _validate_one(case: dict, workdir: Path) -> dict:
+REPO_ROOT = Path(__file__).resolve().parent.parent
+FIXTURES_DIR_DEFAULT = REPO_ROOT / "fixtures"
+
+
+def _status_from(declared: dict, apc: dict) -> str:
+    all_ok = declared.get("ok", False) and apc.get("ok", False)
+    if all_ok:
+        return "pass"
+    if not declared.get("ok") and "raised" in declared.get("detail", ""):
+        return "error"
+    return "fail"
+
+
+def _compute_changes(workdir: Path) -> dict:
+    """Return the spec §9.3 summary for this workdir."""
+    sidecar = workdir / baseline.SIDECAR_DIRNAME / baseline.BASELINE_FILENAME
+    base_files = json.loads(sidecar.read_text())["files"] if sidecar.exists() else {}
+    current = baseline.walk(workdir)
+    d = baseline.diff(base_files, current)
+    return {
+        "created":         d["created"],
+        "modified":        d["modified"],
+        "deleted":         d["deleted"],
+        "unchanged_count": len(d["unchanged"]),
+        "unsupported":     d["unsupported"],
+    }
+
+
+def _read_text_or_none(path: Path) -> list[str] | None:
+    """Return splitlines(keepends=True) or None if the file is binary / missing."""
+    if not path.exists():
+        return []
+    try:
+        return path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except (UnicodeDecodeError, OSError):
+        return None
+
+
+def _write_changes_diff(workdir: Path, case: dict, changes: dict, out_path: Path,
+                        fixtures_dir: Path) -> None:
+    """Emit a unified diff of text changes. Always writes, even if empty."""
+    fixture = case.get("fixture")
+    fixture_basename = Path(fixture).name if fixture else None
+    buf: list[str] = []
+
+    def _diff(before: list[str] | None, after: list[str] | None, label_from: str, label_to: str) -> None:
+        if before is None or after is None:
+            buf.append(f"# skipped binary: {label_to or label_from}\n")
+            return
+        for line in difflib.unified_diff(before, after, fromfile=label_from, tofile=label_to):
+            buf.append(line)
+
+    def _fixture_source(rel: str) -> Path | None:
+        if fixture_basename and rel.startswith(fixture_basename + "/"):
+            inner = rel[len(fixture_basename) + 1:]
+            return fixtures_dir / fixture / inner
+        return None
+
+    for rel in changes["created"]:
+        after = _read_text_or_none(workdir / rel)
+        _diff([], after, "/dev/null", f"workdir/{rel}")
+
+    for rel in changes["modified"]:
+        src = _fixture_source(rel)
+        before = _read_text_or_none(src) if src else []
+        after = _read_text_or_none(workdir / rel)
+        _diff(before, after,
+              f"fixture/{rel}" if src else "/dev/null",
+              f"workdir/{rel}")
+
+    for rel in changes["deleted"]:
+        src = _fixture_source(rel)
+        before = _read_text_or_none(src) if src else []
+        _diff(before, [], f"fixture/{rel}" if src else "/dev/null", "/dev/null")
+
+    out_path.write_text("".join(buf))
+
+
+def _artifact_refs(run_dir: Path, case_dir: Path) -> dict:
+    def rel(p: Path) -> str:
+        return p.relative_to(run_dir).as_posix()
+    return {
+        "case_snapshot": rel(case_dir / runs.CASE_SNAPSHOT_NAME),
+        "workdir":       rel(case_dir / "workdir"),
+        "changes_json":  rel(case_dir / "changes.json"),
+        "changes_diff":  rel(case_dir / "changes.diff"),
+        "transcript":    rel(case_dir / "transcript.txt"),
+    }
+
+
+def _validate_one(case: dict, workdir: Path) -> tuple[dict, dict]:
     t0 = time.monotonic()
     validator_type = case["validator"]["type"]
     validator_mod = REGISTRY.get(validator_type)
-    validators_results: list[dict] = []
     try:
         if validator_mod is None:
-            declared = {"type": validator_type, "ok": False, "detail": f"unknown validator type: {validator_type}"}
+            declared = {"type": validator_type, "ok": False,
+                        "detail": f"unknown validator type: {validator_type}"}
         else:
             declared = validator_mod.validate(case, workdir)
     except Exception as e:
-        declared = {"type": validator_type, "ok": False, "detail": f"validator raised: {e!r}"}
-    validators_results.append(declared)
+        declared = {"type": validator_type, "ok": False,
+                    "detail": f"validator raised: {e!r}"}
 
     try:
         apc = ALWAYS_ON.validate(case, workdir)
@@ -2442,35 +2786,32 @@ def _validate_one(case: dict, workdir: Path) -> dict:
         apc = {
             "type": "allowed_paths_check", "ok": False,
             "detail": f"apc raised: {e!r}",
-            "violations": [], "counts": {"created": 0, "modified": 0, "deleted": 0, "unchanged": 0},
+            "violations": [],
+            "counts": {"created": 0, "modified": 0, "deleted": 0, "unchanged": 0},
         }
 
-    all_ok = declared.get("ok", False) and apc.get("ok", False)
-    status = "pass" if all_ok else "fail"
-    if not declared.get("ok") and "raised" in declared.get("detail", ""):
-        status = "error"
-
-    return {
-        "schema_version": 1,
-        "case_id": case["id"],
-        "status": status,
-        "validators": validators_results,
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    partial = {
+        "validators": [declared],
         "allowed_paths_check": {
-            "ok": apc["ok"],
+            "ok":         apc["ok"],
             "violations": apc.get("violations", []),
-            "counts": apc.get("counts", {}),
+            "counts":     apc.get("counts", {}),
         },
-        "duration_ms": int((time.monotonic() - t0) * 1000),
-        "notes": "",
+        "status": _status_from(declared, apc),
+        "duration_ms": duration_ms,
     }
+    return partial, apc
 
 
 def main() -> int:
     p = argparse.ArgumentParser(prog="validate")
     p.add_argument("--run", required=True)
+    p.add_argument("--fixtures-dir", default=str(FIXTURES_DIR_DEFAULT))
     args = p.parse_args()
 
     run_dir = Path(args.run).resolve()
+    fixtures_dir = Path(args.fixtures_dir)
     manifest = runs.read_manifest(run_dir)
     counts = {"total": 0, "passed": 0, "failed": 0, "error": 0}
 
@@ -2478,12 +2819,32 @@ def main() -> int:
         case_dir = run_dir / "cases" / case_id
         case = json.loads((case_dir / runs.CASE_SNAPSHOT_NAME).read_text())
         workdir = case_dir / "workdir"
-        result = _validate_one(case, workdir)
+
+        partial, _ = _validate_one(case, workdir)
+
+        changes = _compute_changes(workdir)
+        (case_dir / "changes.json").write_text(json.dumps(changes, indent=2))
+        _write_changes_diff(workdir, case, changes, case_dir / "changes.diff", fixtures_dir)
+
+        result = {
+            "schema_version": 1,
+            "case_id":        case["id"],
+            "status":         partial["status"],
+            "validators":     partial["validators"],
+            "allowed_paths_check": partial["allowed_paths_check"],
+            "duration_ms":    partial["duration_ms"],
+            "latency_ms":     None,
+            "artifacts":      _artifact_refs(run_dir, case_dir),
+            "notes":          "",
+        }
         runs.write_result(case_dir, result)
+
         counts["total"] += 1
-        counts[{"pass": "passed", "fail": "failed", "error": "error", "skipped": "error"}[result["status"]]] += 1
+        counts[{"pass": "passed", "fail": "failed",
+                "error": "error", "skipped": "error"}[result["status"]]] += 1
 
     manifest["counts"] = counts
+    manifest["finished_at"] = runs.utc_now_iso()
     runs.write_manifest(run_dir, manifest)
 
     return 0 if counts["total"] == counts["passed"] else 1
@@ -2496,7 +2857,7 @@ if __name__ == "__main__":
 - [ ] **Step 5: Run the test and confirm it passes**
 
 Run: `python3 -m unittest tests.test_validate_script -v`
-Expected: PASS (4 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 6: Commit**
 
@@ -2548,9 +2909,13 @@ def run_summarize(run_dir: Path) -> subprocess.CompletedProcess:
 
 
 class TestSummarize(unittest.TestCase):
-    def test_summary_written_with_table(self):
+    def test_summary_header_and_table(self):
         with tempfile.TemporaryDirectory() as td:
-            run_dir = run_new("--label", "s", "--cases", "SMK-001", "--runs-dir", td)
+            run_dir = run_new("--label", "s", "--cases", "SMK-001", "--runs-dir", td,
+                              "--frontend", "claude-code",
+                              "--model", "claude-opus-4-7",
+                              "--provider", "anthropic",
+                              "--local-or-cloud", "cloud")
             workdir = run_dir / "cases" / "SMK-001" / "workdir"
             (workdir / "out").mkdir()
             (workdir / "out" / "banner.txt").write_bytes(b"HELLO-BENCHMARK-V1")
@@ -2559,8 +2924,23 @@ class TestSummarize(unittest.TestCase):
             r = run_summarize(run_dir)
             self.assertEqual(r.returncode, 0, r.stderr)
             text = (run_dir / "summary.md").read_text()
-            self.assertIn("| case | status | declared validator | allowed_paths | notes |", text)
+
+            # Case table header and row
+            self.assertIn("| case | status | declared validator | allowed_paths | latency_ms | notes |", text)
             self.assertIn("| SMK-001 | pass | exact_text |", text)
+
+            # Agent block
+            self.assertIn("## Agent", text)
+            self.assertIn("frontend: claude-code", text)
+            self.assertIn("model: claude-opus-4-7", text)
+            self.assertIn("provider: anthropic", text)
+            self.assertIn("local_vs_cloud: cloud", text)
+
+            # Environment block
+            self.assertIn("## Environment", text)
+            self.assertIn("host:", text)
+            self.assertIn("python:", text)
+
             self.assertIn("Totals:", text)
 
 
@@ -2576,7 +2956,7 @@ Expected: FAIL — script missing.
 - [ ] **Step 3: Implement `scripts/summarize.py`**
 
 ```python
-"""Emit summary.md from manifest.json + per-case result.json files."""
+"""Emit summary.md from manifest.json + per-case result.json files (spec §9.5)."""
 from __future__ import annotations
 
 import argparse
@@ -2585,16 +2965,78 @@ from pathlib import Path
 from bench import runs
 
 
-HEADER = "| case | status | declared validator | allowed_paths | notes |"
-SEP    = "|------|--------|--------------------|----------------|-------|"
+TABLE_HEADER = "| case | status | declared validator | allowed_paths | latency_ms | notes |"
+TABLE_SEP    = "|------|--------|--------------------|----------------|------------|-------|"
 
 
 def _row(case_id: str, result: dict) -> str:
-    declared = result["validators"][0] if result.get("validators") else {"type": "", "ok": False}
+    validators = result.get("validators") or []
+    declared = validators[0] if validators else {"type": ""}
     apc = result.get("allowed_paths_check", {})
     apc_cell = "ok" if apc.get("ok") else f"{len(apc.get('violations', []))} violation(s)"
+    latency = result.get("latency_ms")
+    latency_cell = "-" if latency is None else str(latency)
     notes = (result.get("notes") or "").replace("|", "\\|")
-    return f"| {case_id} | {result.get('status','?')} | {declared.get('type','')} | {apc_cell} | {notes} |"
+    return (f"| {case_id} | {result.get('status','?')} | {declared.get('type','')} | "
+            f"{apc_cell} | {latency_cell} | {notes} |")
+
+
+def _header_block(manifest: dict) -> list[str]:
+    return [
+        f"# Run {manifest['run_id']}",
+        "",
+        f"- timestamp: {manifest.get('timestamp') or '-'}",
+        f"- started_at: {manifest.get('started_at') or '-'}",
+        f"- finished_at: {manifest.get('finished_at') or '-'}",
+        f"- label: {manifest.get('label','')}",
+        f"- suite: {manifest.get('suite') or '-'}",
+    ]
+
+
+def _agent_block(agent: dict) -> list[str]:
+    return [
+        "",
+        "## Agent",
+        "",
+        f"- frontend: {agent.get('frontend','')}",
+        f"- model: {agent.get('model','')}",
+        f"- provider: {agent.get('provider','')}",
+        f"- local_vs_cloud: {agent.get('local_vs_cloud','')}",
+        f"- runtime_base_url: {agent.get('runtime_base_url') or '-'}",
+        f"- notes: {agent.get('notes','')}",
+    ]
+
+
+def _environment_block(env: dict, hw: dict) -> list[str]:
+    return [
+        "",
+        "## Environment",
+        "",
+        f"- host: {env.get('host','')}",
+        f"- os: {env.get('os','')}",
+        f"- python: {env.get('python','')}",
+        f"- arch: {env.get('arch','')}",
+        f"- cpu_cores: {hw.get('cpu_cores')}",
+        f"- memory_gb: {hw.get('memory_gb')}",
+        f"- gpu: {hw.get('gpu') or '-'}",
+    ]
+
+
+def _table_block(run_dir: Path, manifest: dict) -> list[str]:
+    lines = ["", "## Cases", "", TABLE_HEADER, TABLE_SEP]
+    for case_id in manifest["cases"]:
+        result = runs.read_result(run_dir / "cases" / case_id)
+        lines.append(_row(case_id, result))
+    return lines
+
+
+def _footer_block(manifest: dict) -> list[str]:
+    c = manifest["counts"]
+    return [
+        "",
+        f"Totals: total={c['total']} passed={c['passed']} failed={c['failed']} error={c['error']}",
+        f"Notes: {manifest.get('notes','') or '-'}",
+    ]
 
 
 def main() -> int:
@@ -2605,20 +3047,13 @@ def main() -> int:
     run_dir = Path(args.run).resolve()
     manifest = runs.read_manifest(run_dir)
 
-    lines = [f"# Run {manifest['run_id']}", "", HEADER, SEP]
-    for case_id in manifest["cases"]:
-        result = runs.read_result(run_dir / "cases" / case_id)
-        lines.append(_row(case_id, result))
+    lines: list[str] = []
+    lines += _header_block(manifest)
+    lines += _agent_block(manifest.get("agent", {}))
+    lines += _environment_block(manifest.get("environment", {}), manifest.get("hardware", {}))
+    lines += _table_block(run_dir, manifest)
+    lines += _footer_block(manifest)
 
-    c = manifest["counts"]
-    agent = manifest.get("agent", {})
-    lines += [
-        "",
-        f"Totals: total={c['total']} passed={c['passed']} failed={c['failed']} error={c['error']}",
-        f"Label: {manifest.get('label','')}",
-        f"Suite: {manifest.get('suite') or '-'}",
-        f"Agent: name={agent.get('name','')} model={agent.get('model','')} notes={agent.get('notes','')}",
-    ]
     (run_dir / "summary.md").write_text("\n".join(lines) + "\n")
     return 0
 
@@ -2823,14 +3258,31 @@ v1 has no execution harness. The loop is manual:
 ## 1. Scaffold a run
 
 ```bash
-python3 -m scripts.new_run --label my-agent --suite smoke
+python3 -m scripts.new_run \
+  --label my-agent --suite smoke \
+  --frontend claude-code --model claude-opus-4-7 --provider anthropic \
+  --local-or-cloud cloud --notes "first smoke pass"
 ```
 
 This prints the new run directory, e.g. `runs/20260421-180000-my-agent/`.
 
-Other flags:
+Required: `--label`. Everything else is optional but worth populating so the run is self-describing for later comparison.
+
+Selection flags:
 - `--cases SMK-001,RO-001` — explicit case list (overrides `--suite`).
 - `--runs-dir some/path` — use a different runs root (useful in tests).
+
+Agent metadata flags (all optional, populate the manifest for retrospective analysis):
+- `--frontend` — tool name: `claude-code`, `codex`, `cursor`, `aider`, `ollama-cli`, ...
+- `--model` — model identifier string.
+- `--provider` — vendor/engine: `anthropic`, `openai`, `ollama`, `vllm`, ...
+- `--local-or-cloud` — one of `local`, `cloud`, `unknown` (default `unknown`).
+- `--runtime-base-url` — for local servers or custom proxies (e.g. `http://localhost:11434`).
+- `--agent-notes` — freeform note attached to the agent block.
+- `--notes` — freeform run-level note.
+- `--gpu` — GPU description; stored under `hardware.gpu` (otherwise `null`).
+
+`environment.{host, os, python, arch}` and `hardware.{cpu_cores, memory_gb}` are auto-collected.
 
 Each case gets `runs/<run>/cases/<id>/workdir/` with the fixture copy (if any) and a `.bench/` sidecar containing `baseline.json` + `allowed_paths.json`.
 
@@ -2844,7 +3296,7 @@ Feed `case.json` (or its `prompt` field) to your agent of choice. Whatever tool 
 python3 -m scripts.validate --run runs/20260421-180000-my-agent
 ```
 
-Writes `result.json` per case and updates `manifest.json` counts. Exits `0` iff every case passed.
+Writes three artifacts per case — `result.json`, `changes.json`, `changes.diff` — and updates `manifest.json` (`counts`, `finished_at`). Exits `0` iff every case passed.
 
 ## 4. Summarize
 
@@ -2962,7 +3414,12 @@ class TestE2ESmoke(unittest.TestCase):
     def test_full_v1_pipeline_all_pass(self):
         with tempfile.TemporaryDirectory() as td:
             run_dir = new_run(td, "--label", "e2e",
-                              "--cases", "SMK-001,STR-001,RO-001,EDT-002")
+                              "--cases", "SMK-001,STR-001,RO-001,EDT-002",
+                              "--frontend", "claude-code",
+                              "--model", "claude-opus-4-7",
+                              "--provider", "anthropic",
+                              "--local-or-cloud", "cloud",
+                              "--notes", "e2e smoke")
             populate_all_four_cases_to_pass(run_dir)
 
             v = validate(run_dir)
@@ -2977,6 +3434,20 @@ class TestE2ESmoke(unittest.TestCase):
 
             m = json.loads((run_dir / "manifest.json").read_text())
             self.assertEqual(m["counts"], {"total": 4, "passed": 4, "failed": 0, "error": 0})
+            self.assertIsNotNone(m["finished_at"])
+            self.assertEqual(m["agent"]["frontend"], "claude-code")
+            self.assertEqual(m["agent"]["model"], "claude-opus-4-7")
+            self.assertIn("python", m["environment"])
+            self.assertEqual(m["notes"], "e2e smoke")
+
+            # Every case has artifact references and on-disk artifacts.
+            for cid in ["SMK-001", "STR-001", "RO-001", "EDT-002"]:
+                case_dir = run_dir / "cases" / cid
+                result = json.loads((case_dir / "result.json").read_text())
+                self.assertEqual(result["artifacts"]["case_snapshot"], f"cases/{cid}/case.json")
+                self.assertIn("latency_ms", result)
+                self.assertTrue((case_dir / "changes.json").exists(), cid)
+                self.assertTrue((case_dir / "changes.diff").exists(), cid)
 
 
 if __name__ == "__main__":
