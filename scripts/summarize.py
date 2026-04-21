@@ -11,6 +11,11 @@ TABLE_HEADER = "| case | status | declared validator | allowed_paths | latency_m
 TABLE_SEP    = "|------|--------|--------------------|----------------|------------|-------|"
 
 
+def _display(value) -> str:
+    """Render a nullable metadata value for human reading: None → '-'."""
+    return "-" if value is None else str(value)
+
+
 def _row(case_id: str, result: dict) -> str:
     validators = result.get("validators") or []
     declared = validators[0] if validators else {"type": ""}
@@ -58,9 +63,9 @@ def _environment_block(env: dict, hw: dict) -> list[str]:
         f"- os: {env.get('os','')}",
         f"- python: {env.get('python','')}",
         f"- arch: {env.get('arch','')}",
-        f"- cpu_cores: {hw.get('cpu_cores')}",
-        f"- memory_gb: {hw.get('memory_gb')}",
-        f"- gpu: {hw.get('gpu') or '-'}",
+        f"- cpu_cores: {_display(hw.get('cpu_cores'))}",
+        f"- memory_gb: {_display(hw.get('memory_gb'))}",
+        f"- gpu: {_display(hw.get('gpu'))}",
     ]
 
 
