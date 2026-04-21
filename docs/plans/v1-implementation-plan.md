@@ -3207,6 +3207,12 @@ No model-graded scoring. No test execution inside fixtures (v1.1).
 ## Result interpretation
 
 A pass/fail result on a v1 case tells you whether the agent followed the narrow contract of that case. Generalizations beyond that (e.g., "model X is better at refactors") need more cases than v1 ships.
+
+## Known limitations (v1)
+
+- **Unreadable workdir files abort validation.** If a file inside `workdir/` becomes unreadable (permissions, deleted-while-walking) between `new_run.py` and `validate.py`, the baseline walk raises `PermissionError` and the run errors out. Acceptable because workdirs are operator-controlled; no retry, no partial scoring.
+- **`__unsupported__` is an internal marker.** Downstream code (including `allowed_paths_check`) keys off the `unsupported` bucket returned by `bench.baseline.diff`, not the string sentinel. Do not introspect it.
+- **Symlinks and non-regular files** inside `workdir/` are always flagged as violations. v1 does not support symlinked outputs.
 ```
 
 - [ ] **Step 2: Create `docs/case-authoring.md`**
