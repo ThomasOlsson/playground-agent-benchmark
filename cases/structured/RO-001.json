@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "RO-001",
+  "title": "List routes as JSON",
+  "category": "read-only-understanding",
+  "difficulty": "easy",
+  "mode": "read-only",
+  "tags": ["structured-output", "read-only"],
+  "fixture": "routes-php",
+  "allowed_paths": ["out/routes.json"],
+  "prompt": "Read routes-php/routes/web.php. Write a JSON array to out/routes.json where each element is an object with keys method (uppercase HTTP verb), path (string starting with /), handler (string like \"UserController@index\"). Include every Route declared in the file. Do not modify any fixture file.",
+  "expected_output": { "kind": "file", "path": "out/routes.json" },
+  "validator": {
+    "type": "keys_present",
+    "args": {
+      "path": "out/routes.json",
+      "top_type": "array",
+      "min_len": 6,
+      "each_item": {
+        "required": ["method", "path", "handler"],
+        "constraints": {
+          "method":  { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+          "path":    { "type": "string", "regex": "^/" },
+          "handler": { "type": "string", "regex": "^[A-Z][A-Za-z]*@[a-z][A-Za-z]*$" }
+        }
+      }
+    }
+  }
+}

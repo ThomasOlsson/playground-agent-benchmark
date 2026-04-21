@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "STR-001",
+  "title": "Write project summary JSON",
+  "category": "structured-json",
+  "difficulty": "easy",
+  "mode": "write",
+  "tags": ["smoke", "structured-output", "no-fixture"],
+  "fixture": null,
+  "allowed_paths": ["out/summary.json"],
+  "prompt": "Write a valid JSON file to out/summary.json with exactly these three keys: name (string), version (string matching semver like \"1.2.3\"), tags (array of exactly 3 lowercase strings matching ^[a-z][a-z0-9-]*$). Do not add any other keys.",
+  "expected_output": { "kind": "file", "path": "out/summary.json" },
+  "validator": {
+    "type": "keys_present",
+    "args": {
+      "path": "out/summary.json",
+      "required": ["name", "version", "tags"],
+      "constraints": {
+        "name":    { "type": "string" },
+        "version": { "type": "string", "regex": "^\\d+\\.\\d+\\.\\d+$" },
+        "tags":    { "type": "array",  "len": 3, "items_regex": "^[a-z][a-z0-9-]*$" }
+      }
+    }
+  }
+}

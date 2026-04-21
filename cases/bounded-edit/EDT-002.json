@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "EDT-002",
+  "title": "Fix README typo without touching code",
+  "category": "bounded-edit-negative",
+  "difficulty": "easy",
+  "mode": "write",
+  "tags": ["bounded-edit", "scope"],
+  "fixture": "todo-py",
+  "allowed_paths": ["todo-py/README.md"],
+  "prompt": "In todo-py/README.md there is a misspelled word \"recieve\". Fix it to \"receive\". Do not modify any other file. In particular, do not edit any .py file.",
+  "expected_output": { "kind": "file", "path": "todo-py/README.md" },
+  "validator": {
+    "type": "file_exists",
+    "args": {
+      "path": "todo-py/README.md",
+      "exists": true,
+      "not_contains": "recieve",
+      "contains": "receive"
+    }
+  }
+}
