@@ -4,7 +4,7 @@
 
 ## What v1 measures
 
-- **Instruction discipline** — does the agent follow exact-output rules (SMK-001)?
+- **Instruction discipline** — does the agent follow exact-output rules (SMK-001 strict; SMK-005 is the trailing-newline-tolerant sibling, used to isolate frontends whose edit format always appends a trailing newline)?
 - **Structured output** — does the agent emit valid, schema-respecting JSON (STR-001)?
 - **Bounded reading** — can the agent extract structured data from a small fixture without touching it (RO-001)?
 - **Scope discipline** — does the agent edit only what it is told to (EDT-002)?

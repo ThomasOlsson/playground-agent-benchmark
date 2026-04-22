@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "SMK-005",
+  "title": "Echo exact banner (trailing-newline-tolerant sibling of SMK-001)",
+  "category": "exact-output",
+  "difficulty": "trivial",
+  "mode": "write",
+  "tags": ["smoke", "no-fixture", "frontend-quirk-trailing-newline"],
+  "fixture": null,
+  "allowed_paths": ["out/banner.txt"],
+  "prompt": "Write the following exact text to out/banner.txt, with no leading or trailing whitespace, with a single trailing newline:\n\nHELLO-BENCHMARK-V1",
+  "expected_output": { "kind": "file", "path": "out/banner.txt" },
+  "validator": {
+    "type": "exact_text",
+    "args": {
+      "path": "out/banner.txt",
+      "expect": "HELLO-BENCHMARK-V1",
+      "trailing_newline": true
+    }
+  }
+}
