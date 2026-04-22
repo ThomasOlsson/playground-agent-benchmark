@@ -31,7 +31,7 @@ class TestNewRun(unittest.TestCase):
             manifest = json.loads((d / "manifest.json").read_text())
             self.assertEqual(manifest["label"], "unit")
             self.assertEqual(manifest["suite"], "smoke")
-            self.assertEqual(sorted(manifest["cases"]), ["SMK-001", "STR-001"])
+            self.assertEqual(sorted(manifest["cases"]), ["SMK-001", "SMK-005", "STR-001"])
 
             for cid in manifest["cases"]:
                 workdir = d / "cases" / cid / "workdir"
