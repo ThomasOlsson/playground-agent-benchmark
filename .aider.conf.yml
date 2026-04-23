@@ -1,0 +1,7 @@
+model: ollama_chat/gemma4-bench-32k
+weak-model: ollama_chat/gemma4-bench-32k
+auto-commits: false
+dirty-commits: false
+stream: false
+yes-always: true
+map-tokens: 0
